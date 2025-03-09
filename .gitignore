@@ -1,0 +1,50 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/*
+*.bak
+
+# Vendoring
+node_modules
+vendor
+
+# Test binary, build with `go test -c`
+test.yaml
+*.test
+*_fuzz_target
+*_fuzz_target.a
+report.xml
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+*-report.json
+
+# IDE
+.idea
+.DS_Store
+data
+
+# Test
+coverage.txt
+
+# Ignore build
+pkged.go
+dist
+.ruff_cache
+
+# Security
+*.pem
+*.csr
+.decrypted~*
+
+# Vagrant
+.vagrant
+
+# Logs
+*.log
+
+# Config
+.env
