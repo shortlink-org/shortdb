@@ -7,5 +7,5 @@ type Index[T any] interface {
 	Delete(key T) error
 
 	Marshal() ([]byte, error)
-	UnMarshal([]byte, any) error
+	UnMarshal(bytes []byte, item any) error
 }

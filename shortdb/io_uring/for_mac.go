@@ -3,6 +3,7 @@
 package io_uring
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -19,7 +20,7 @@ func Err() <-chan error {
 func ReadFile(path string, cb func(buf []byte)) error {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read file: %w", err)
 	}
 
 	cb(content)
@@ -29,18 +30,18 @@ func ReadFile(path string, cb func(buf []byte)) error {
 
 func Poll() {}
 
-func WriteFile(path string, data []byte, perm os.FileMode, cb func(written int)) error {
+func WriteFile(path string, data []byte, perm os.FileMode, callback func(written int)) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm) // #nosec
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open file: %w", err)
 	}
 
 	written, err := f.Write(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write data to file: %w", err)
 	}
 
-	cb(written)
+	callback(written)
 
 	return nil
 }

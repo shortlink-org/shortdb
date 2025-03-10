@@ -1,3 +1,5 @@
+//
+//nolint:testpackage // ignore for this test package
 package binary_tree
 
 import (

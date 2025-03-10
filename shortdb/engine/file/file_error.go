@@ -1,7 +1,5 @@
 package file
 
-import (
-	"fmt"
-)
+import "errors"
 
-var ErrIncorrectType = fmt.Errorf("exec: incorret type")
+var ErrIncorrectType = errors.New("exec: incorret type")

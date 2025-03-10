@@ -3,75 +3,73 @@ package file
 import (
 	"fmt"
 
-	page "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/page/v1"
-	v1 "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/query/v1"
-	"github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/engine/file/cursor"
+	page "github.com/shortlink-org/shortdb/shortdb/domain/page/v1"
+	query "github.com/shortlink-org/shortdb/shortdb/domain/query/v1"
+	"github.com/shortlink-org/shortdb/shortdb/engine/file/cursor"
 )
 
-func (f *File) Select(query *v1.Query) ([]*page.Row, error) {
+func (f *File) Select(in *query.Query) ([]*page.Row, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
 	// check table
-	t := f.database.GetTables()[query.GetTableName()]
-	if t == nil {
+	table := f.database.GetTables()[in.GetTableName()]
+	if table == nil {
 		return nil, &NotExistTableError{
-			Table: query.GetTableName(),
+			Table: in.GetTableName(),
 			Type:  "SELECT",
 		}
 	}
 
-	if len(query.GetFields()) == 0 {
+	if len(in.GetFields()) == 0 {
 		return nil, ErrIncorrectNameFields
 	}
 
 	// response
 	response := make([]*page.Row, 0)
 
-	currentRow, err := cursor.New(t, false)
-	if err != nil {
-		return nil, ErrCreateCursor
-	}
-
+	currentRow := cursor.NewBuilder(table).Build()
 	for !currentRow.EndOfTable {
 		// load data
-		if t.GetPages()[currentRow.PageId] == nil {
-			pagePath := fmt.Sprintf("%s/%s_%s_%d.page", f.path, f.database.GetName(), t.GetName(), currentRow.PageId)
+		if table.GetPages()[currentRow.PageId] == nil {
+			pagePath := fmt.Sprintf("%s/%s_%s_%d.page", f.path, f.database.GetName(), table.GetName(), currentRow.PageId)
+
 			payload, errLoadPage := f.loadPage(pagePath)
 			if errLoadPage != nil {
 				return nil, errLoadPage
 			}
 
-			if t.GetPages() == nil {
-				t.Pages = make(map[int32]*page.Page, 0)
+			if table.GetPages() == nil {
+				table.Pages = make(map[int32]*page.Page, 0)
 			}
 
-			t.Pages[currentRow.PageId] = payload
+			table.Pages[currentRow.PageId] = payload
 		}
 
 		// get value
 		record, errGetValue := currentRow.Value()
 		if errGetValue != nil {
-			return nil, errGetValue
+			return nil, fmt.Errorf("get value error: %w", errGetValue)
 		}
 
-		for _, field := range query.GetFields() {
+		for _, field := range in.GetFields() {
 			if record.GetValue()[field] == nil {
 				return nil, &IncorrectNameFieldsError{
 					Field: field,
-					Table: query.GetTableName(),
+					Table: in.GetTableName(),
 				}
 			}
 		}
-		if query.IsFilter(record, t.GetFields()) {
+
+		if in.IsFilter(record, table.GetFields()) {
 			response = append(response, record)
 
-			if query.IsLimit() {
-				query.Limit--
+			if in.IsLimit() {
+				in.Limit--
 			}
 		}
 
-		if !query.IsLimit() {
+		if !in.IsLimit() {
 			break
 		}
 
@@ -81,18 +79,18 @@ func (f *File) Select(query *v1.Query) ([]*page.Row, error) {
 	return response, nil
 }
 
-func (f *File) Update(query *v1.Query) error {
+func (*File) Update(_ *query.Query) error {
 	// TODO implement me
 	return nil
 }
 
-func (f *File) Insert(query *v1.Query) error {
-	err := f.insertToTable(query)
+func (f *File) Insert(in *query.Query) error {
+	err := f.insertToTable(in)
 	if err != nil {
 		return err
 	}
 
-	err = f.insertToIndex(query)
+	err = f.insertToIndex(in)
 	if err != nil {
 		return err
 	}
@@ -100,47 +98,43 @@ func (f *File) Insert(query *v1.Query) error {
 	return nil
 }
 
-func (f *File) insertToTable(query *v1.Query) error {
+func (f *File) insertToTable(in *query.Query) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	// check the table's existence
-	t := f.database.GetTables()[query.GetTableName()]
-	if t == nil {
+	table := f.database.GetTables()[in.GetTableName()]
+	if table == nil {
 		return &NotExistTableError{
-			Table: query.GetTableName(),
+			Table: in.GetTableName(),
 			Type:  "INSERT",
 		}
 	}
 
 	// check if a new page needs to be created
-	_, err := f.addPage(query.GetTableName())
+	_, err := f.addPage(in.GetTableName())
 	if err != nil {
 		return ErrCreatePage
 	}
 
-	if t.GetStats().GetPageCount() > -1 && t.GetPages()[t.GetStats().GetPageCount()] == nil {
+	if table.GetStats().GetPageCount() > -1 && table.GetPages()[table.GetStats().GetPageCount()] == nil {
 		// load page
-		pagePath := fmt.Sprintf("%s/%s_%s_%d.page", f.path, f.database.GetName(), t.GetName(), t.GetStats().GetPageCount())
+		pagePath := fmt.Sprintf("%s/%s_%s_%d.page", f.path, f.database.GetName(), table.GetName(), table.GetStats().GetPageCount())
+
 		payload, errLoadPage := f.loadPage(pagePath)
 		if errLoadPage != nil {
 			return errLoadPage
 		}
 
-		if t.GetPages() == nil {
-			t.Pages = make(map[int32]*page.Page, 0)
+		if table.GetPages() == nil {
+			table.Pages = make(map[int32]*page.Page, 0)
 		}
 
-		t.Pages[t.GetStats().GetPageCount()] = payload
+		table.Pages[table.GetStats().GetPageCount()] = payload
 	}
 
 	// insert to last page
-	currentRow, err := cursor.New(t, true)
-	if err != nil {
-		return &CreateCursorError{
-			Type: "INSERT",
-		}
-	}
+	currentRow := cursor.NewBuilder(table).AtEnd().Build()
 
 	row, err := currentRow.Value()
 	if err != nil {
@@ -151,20 +145,22 @@ func (f *File) insertToTable(query *v1.Query) error {
 	record := page.Row{
 		Value: make(map[string][]byte),
 	}
-	for index, field := range query.GetFields() {
-		if t.GetFields()[field].String() == "" {
+
+	for index, field := range in.GetFields() {
+		if table.GetFields()[field].String() == "" {
 			return &IncorrectTypeFieldsError{
 				Field: field,
-				Table: query.GetTableName(),
+				Table: in.GetTableName(),
 			}
 		}
 
-		record.Value[field] = []byte(query.GetInserts()[0].GetItems()[index])
+		record.Value[field] = []byte(in.GetInserts()[0].GetItems()[index])
 	}
+
 	row.Value = record.GetValue()
 
 	// update stats
-	t.Stats.RowsCount += 1
+	table.Stats.RowsCount += 1
 
 	// iterator to next value
 	currentRow.Advance()
@@ -172,12 +168,12 @@ func (f *File) insertToTable(query *v1.Query) error {
 	return nil
 }
 
-func (f *File) insertToIndex(query *v1.Query) error {
+func (*File) insertToIndex(_ *query.Query) error {
 	// TODO implement me
 	return nil
 }
 
-func (f *File) Delete(query *v1.Query) error {
+func (*File) Delete(_ *query.Query) error {
 	// TODO implement me
 	return nil
 }

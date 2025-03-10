@@ -1,6 +1,8 @@
 package binary_tree
 
 import (
+	"fmt"
+
 	"github.com/segmentio/encoding/json"
 )
 
@@ -15,10 +17,15 @@ type Tree[T any] struct {
 }
 
 func (t *Tree[T]) Marshal() ([]byte, error) {
-	return json.Marshal(t)
+	payload, err := json.Marshal(t)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal tree: %w", err)
+	}
+
+	return payload, nil
 }
 
-func (t *Tree[T]) UnMarshal(bytes []byte, i any) error {
+func (*Tree[T]) UnMarshal(_ []byte, _ any) error {
 	// TODO implement me
 	panic("implement me")
 }

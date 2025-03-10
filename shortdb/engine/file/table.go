@@ -1,11 +1,11 @@
 package file
 
 import (
-	query "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/query/v1"
-	table "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/table/v1"
+	query "github.com/shortlink-org/shortdb/shortdb/domain/query/v1"
+	table "github.com/shortlink-org/shortdb/shortdb/domain/table/v1"
 )
 
-func (f *File) CreateTable(q *query.Query) error {
+func (f *File) CreateTable(item *query.Query) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -14,16 +14,16 @@ func (f *File) CreateTable(q *query.Query) error {
 	}
 
 	// check
-	if f.database.GetTables()[q.GetTableName()] != nil {
+	if f.database.GetTables()[item.GetTableName()] != nil {
 		return ErrExistTable
 	}
 
-	f.database.Tables[q.GetTableName()] = table.New(q)
+	f.database.Tables[item.GetTableName()] = table.New(item)
 
 	return nil
 }
 
-func (f *File) DropTable(name string) error {
+func (*File) DropTable(_ string) error {
 	// TODO implement me
 	return nil
 }

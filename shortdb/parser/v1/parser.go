@@ -5,9 +5,11 @@ import (
 	"strconv"
 	"strings"
 
-	field "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/field/v1"
-	v1 "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/index/v1"
-	query "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/query/v1"
+	field "github.com/shortlink-org/shortdb/shortdb/domain/field/v1"
+	index "github.com/shortlink-org/shortdb/shortdb/domain/index/v1"
+	query "github.com/shortlink-org/shortdb/shortdb/domain/query/v1"
+	"github.com/shortlink-org/shortdb/shortdb/pkg/safecast"
+
 	"github.com/shortlink-org/shortlink/pkg/types/vector"
 )
 
@@ -48,7 +50,7 @@ var reservedWords = []string{
 }
 
 var (
-	r = regexp.MustCompile("[a-zA-Z0-9]") //nolint:errcheck // TODO: refactor
+	isCorrectName = regexp.MustCompile("[a-zA-Z0-9]") //nolint:errcheck // TODO: refactor
 
 	// TypeFieldTable - list of support type fields of table
 	typeFieldTable = []string{"int", "integer", "string", "text", "boolean", "bool"}
@@ -71,7 +73,7 @@ func New(sql string) (*Parser, error) {
 
 // Parse - main function that returns the "query struct" or an error
 func (p *Parser) Parse() (*query.Query, error) {
-	q, err := p.doParse()
+	parsedQuery, err := p.doParse()
 	p.Error = err.Error()
 
 	if p.GetError() == "" {
@@ -84,12 +86,13 @@ func (p *Parser) Parse() (*query.Query, error) {
 		return nil, &ParserError{Err: p.GetError()}
 	}
 
-	return q, nil
+	return parsedQuery, nil
 }
 
+//nolint:funlen // it's OK, because it's a parser
 func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,maintidx,revive,cyclop // TODO: refactor
 	for {
-		if p.GetI() >= int32(len(p.GetSql())) {
+		if p.GetI() >= safecast.IntToInt32(len(p.GetSql())) {
 			return p.GetQuery(), &ParserError{Err: p.GetError()}
 		}
 
@@ -195,6 +198,7 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 			p.pop()
 
 			look := p.peek()
+
 			switch {
 			case strings.EqualFold(look, WHERE):
 				p.Step = Step_STEP_WHERE
@@ -230,6 +234,7 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 			if !strings.EqualFold(whereRWord, WHERE) {
 				return p.GetQuery(), ErrExpectedWhere
 			}
+
 			p.pop()
 			p.Step = Step_STEP_WHERE_FIELD
 		case Step_STEP_WHERE_FIELD:
@@ -245,6 +250,7 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 			currentCondition := p.GetQuery().GetConditions()[len(p.GetQuery().GetConditions())-1]
 
 			operator := p.peek()
+
 			currentCondition.Operator = getOperator(operator)
 			if currentCondition.GetOperator() == query.Operator_OPERATOR_UNSPECIFIED {
 				return p.GetQuery(), ErrExpectedOperator
@@ -265,9 +271,11 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 				if ln == 0 {
 					return p.GetQuery(), ErrExpectedQuotedValue
 				}
+
 				currentCondition.RValue = quotedValue
 				currentCondition.RValueIsField = false
 			}
+
 			p.Query.Conditions[len(p.GetQuery().GetConditions())-1] = currentCondition
 			p.pop()
 
@@ -402,13 +410,16 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 		case Step_STEP_JOIN_CONDITION:
 			p.pop()
 			op1 := p.pop()
+
 			op1split := strings.Split(op1, ".")
 			if len(op1split) != 2 { //nolint:mnd // ignore
 				return p.GetQuery(), ErrExpectedQuotedTableNameAndFieldNameToJoin
 			}
+
 			currentCondition := &query.JoinCondition{LTable: op1split[0], LOperand: op1split[1]}
 
 			operator := p.peek()
+
 			currentCondition.Operator = getOperator(operator)
 			if currentCondition.GetOperator() == query.Operator_OPERATOR_UNSPECIFIED {
 				return p.GetQuery(), ErrExpectedOperatorToJoin
@@ -416,6 +427,7 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 
 			p.pop()
 			op2 := p.pop()
+
 			op2split := strings.Split(op2, ".")
 			if len(op2split) != 2 { //nolint:mnd // ignore
 				return p.GetQuery(), ErrExpectedQuotedTableNameAndFieldNameToJoin
@@ -428,6 +440,7 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 			p.Query.Joins[len(p.GetQuery().GetJoins())-1] = currentJoin
 
 			nextOp := p.peek()
+
 			switch {
 			case strings.EqualFold(nextOp, "WHERE"):
 				p.Step = Step_STEP_WHERE
@@ -462,6 +475,7 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 			}
 
 			p.pop()
+
 			if commaOrClosingParens == "," { //nolint:revive // false positive
 				p.Step = Step_STEP_INSERT_FIELDS
 				continue
@@ -491,7 +505,10 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 				return p.GetQuery(), ErrExpectedQuotedValue
 			}
 
-			p.Query.Inserts[len(p.GetQuery().GetInserts())-1].Items = append(p.GetQuery().GetInserts()[len(p.GetQuery().GetInserts())-1].GetItems(), quotedValue)
+			inserts := p.GetQuery().GetInserts()
+			lastIndex := len(inserts) - 1
+
+			p.Query.Inserts[lastIndex].Items = append(inserts[lastIndex].GetItems(), quotedValue)
 			p.pop()
 			p.Step = Step_STEP_INSERT_VALUES_COMMA_OR_CLOSING_PARENS
 		case Step_STEP_INSERT_VALUES_COMMA_OR_CLOSING_PARENS:
@@ -501,6 +518,7 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 			}
 
 			p.pop()
+
 			if commaOrClosingParens == "," {
 				p.Step = Step_STEP_INSERT_VALUES
 				continue
@@ -534,6 +552,7 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 		case Step_STEP_CREATE_TABLE_OPENING_PARENS:
 			openingParens := p.peek()
 			p.pop()
+
 			if openingParens != "(" {
 				return p.GetQuery(), ErrCreateTableExpectedOpeningParens
 			}
@@ -564,28 +583,28 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 			}
 
 			// append field to table
-			if vector.Contains(typeFieldTable, typeField) {
-				switch typeField {
-				case "int":
-					p.Query.TableFields[identifier] = field.Type_TYPE_INTEGER
-				case "integer":
-					p.Query.TableFields[identifier] = field.Type_TYPE_INTEGER
-				case "text":
-					p.Query.TableFields[identifier] = field.Type_TYPE_STRING
-				case "string":
-					p.Query.TableFields[identifier] = field.Type_TYPE_STRING
-				case "bool":
-					p.Query.TableFields[identifier] = field.Type_TYPE_BOOLEAN
-				case "boolean":
-					p.Query.TableFields[identifier] = field.Type_TYPE_BOOLEAN
-				default:
-					return p.GetQuery(), ErrCreateTableUnsupportedTypeOfField
-				}
-
-				p.pop()
-			} else {
+			if !vector.Contains(typeFieldTable, typeField) {
 				return p.GetQuery(), ErrCreateTableUnsupportedTypeOfField
 			}
+
+			switch typeField {
+			case "int":
+				p.Query.TableFields[identifier] = field.Type_TYPE_INTEGER
+			case "integer":
+				p.Query.TableFields[identifier] = field.Type_TYPE_INTEGER
+			case "text":
+				p.Query.TableFields[identifier] = field.Type_TYPE_STRING
+			case "string":
+				p.Query.TableFields[identifier] = field.Type_TYPE_STRING
+			case "bool":
+				p.Query.TableFields[identifier] = field.Type_TYPE_BOOLEAN
+			case "boolean":
+				p.Query.TableFields[identifier] = field.Type_TYPE_BOOLEAN
+			default:
+				return p.GetQuery(), ErrCreateTableUnsupportedTypeOfField
+			}
+
+			p.pop()
 
 			p.Step = Step_STEP_CREATE_TABLE_FIELDS_COMMA_OR_CLOSING_PARENS
 		case Step_STEP_CREATE_TABLE_FIELDS_COMMA_OR_CLOSING_PARENS:
@@ -595,6 +614,7 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 			}
 
 			p.pop()
+
 			if commaOrClosingParens == "," {
 				p.Step = Step_STEP_CREATE_TABLE_FIELDS
 				continue
@@ -627,11 +647,11 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 			p.Query.Limit = int32(limit)
 		case Step_STEP_CREATE_INDEX_NAME:
 			if len(p.GetQuery().GetIndexs()) == 0 {
-				p.Query.Indexs = []*v1.Index{}
+				p.Query.Indexs = []*index.Index{}
 			}
 
 			// set name index of table
-			p.Query.Indexs = append(p.GetQuery().GetIndexs(), &v1.Index{
+			p.Query.Indexs = append(p.GetQuery().GetIndexs(), &index.Index{
 				Name:   p.peek(),
 				Type:   0,
 				Fields: []string{},
@@ -654,14 +674,15 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 			// get type index
 			switch strings.ToUpper(p.peek()) {
 			case "BINARY":
-				p.Query.Indexs[len(p.GetQuery().GetIndexs())-1].Type = v1.Type_TYPE_BINARY_SEARCH
+				p.Query.Indexs[len(p.GetQuery().GetIndexs())-1].Type = index.Type_TYPE_BINARY_SEARCH
 			case "BTREE":
-				p.Query.Indexs[len(p.GetQuery().GetIndexs())-1].Type = v1.Type_TYPE_BTREE
+				p.Query.Indexs[len(p.GetQuery().GetIndexs())-1].Type = index.Type_TYPE_BTREE
 			case "HASH":
-				p.Query.Indexs[len(p.GetQuery().GetIndexs())-1].Type = v1.Type_TYPE_HASH
+				p.Query.Indexs[len(p.GetQuery().GetIndexs())-1].Type = index.Type_TYPE_HASH
 			default:
 				return p.GetQuery(), &IncorrectTypeOfIndexError{Type: p.peek()}
 			}
+
 			p.pop()
 
 			p.Step = Step_STEP_CREATE_INDEX_PAYLOAD
@@ -704,14 +725,14 @@ func (p *Parser) pop() string {
 }
 
 func (p *Parser) peekWithLength() (string, int32) {
-	if p.GetI() >= int32(len(p.GetSql())) {
+	if p.GetI() >= safecast.IntToInt32(len(p.GetSql())) {
 		return "", 0
 	}
 
 	for _, rWord := range reservedWords {
 		token := strings.ToUpper(p.GetSql()[p.GetI():min(len(p.GetSql()), int(p.GetI())+len(rWord))])
 		if token == rWord {
-			return token, int32(len(token))
+			return token, safecast.IntToInt32(len(token))
 		}
 	}
 
@@ -723,19 +744,20 @@ func (p *Parser) peekWithLength() (string, int32) {
 }
 
 func (p *Parser) popWhitespace() {
-	for ; p.GetI() < int32(len(p.GetSql())) && p.GetSql()[p.GetI()] == ' '; p.I++ {
+	for ; p.GetI() < safecast.IntToInt32(len(p.GetSql())) && p.GetSql()[p.GetI()] == ' '; p.I++ {
+		// do nothing
 	}
 }
 
 func (p *Parser) peekQuotedStringWithLength() (string, int32) {
-	if int32(len(p.GetSql())) < p.GetI() || p.GetSql()[p.GetI()] != '\'' {
+	if safecast.IntToInt32(len(p.GetSql())) < p.GetI() || p.GetSql()[p.GetI()] != '\'' {
 		return "", 0
 	}
 
-	for i := p.GetI() + 1; i < int32(len(p.GetSql())); i++ {
+	for i := p.GetI() + 1; i < safecast.IntToInt32(len(p.GetSql())); i++ {
 		if p.GetSql()[i] == '\'' && p.GetSql()[i-1] != '\\' {
 			//nolint:mnd // ignore
-			return p.GetSql()[p.GetI()+1 : i], int32(len(p.GetSql()[p.GetI()+1:i]) + 2) // +2 for the two quotes
+			return p.GetSql()[p.GetI()+1 : i], safecast.IntToInt32(len(p.GetSql()[p.GetI()+1:i]) + 2) // +2 for the two quotes
 		}
 	}
 
@@ -743,13 +765,13 @@ func (p *Parser) peekQuotedStringWithLength() (string, int32) {
 }
 
 func (p *Parser) peekIdentifierStringWithLength() (string, int32) {
-	for i := p.GetI(); i < int32(len(p.GetSql())); i++ {
-		if matched := r.MatchString(string(p.GetSql()[i])); !matched {
-			return p.GetSql()[p.GetI():i], int32(len(p.GetSql()[p.GetI():i]))
+	for i := p.GetI(); i < safecast.IntToInt32(len(p.GetSql())); i++ {
+		if matched := isCorrectName.MatchString(string(p.GetSql()[i])); !matched {
+			return p.GetSql()[p.GetI():i], safecast.IntToInt32(len(p.GetSql()[p.GetI():i]))
 		}
 	}
 
-	return p.GetSql()[p.GetI():], int32(len(p.GetSql()[p.GetI():]))
+	return p.GetSql()[p.GetI():], safecast.IntToInt32(len(p.GetSql()[p.GetI():]))
 }
 
 func (p *Parser) validate() error { //nolint:gocyclo,gocognit // ignore
@@ -773,16 +795,16 @@ func (p *Parser) validate() error { //nolint:gocyclo,gocognit // ignore
 		return ErrWhereClauseIsMandatory
 	}
 
-	for _, c := range p.GetQuery().GetConditions() {
-		if c.GetOperator() == query.Operator_OPERATOR_UNSPECIFIED {
+	for _, condition := range p.GetQuery().GetConditions() {
+		if condition.GetOperator() == query.Operator_OPERATOR_UNSPECIFIED {
 			return ErrConditionWithoutOperator
 		}
 
-		if c.GetLValue() == "" && c.GetLValueIsField() {
+		if condition.GetLValue() == "" && condition.GetLValueIsField() {
 			return ErrConditionWithEmptyRightSideOperand
 		}
 
-		if c.GetRValue() == "" && c.GetRValueIsField() {
+		if condition.GetRValue() == "" && condition.GetRValueIsField() {
 			return ErrConditionWithEmptyLeftSideOperand
 		}
 	}
@@ -802,14 +824,14 @@ func (p *Parser) validate() error { //nolint:gocyclo,gocognit // ignore
 	return nil
 }
 
-func isIdentifier(s string) bool {
+func isIdentifier(identifier string) bool {
 	for _, rw := range reservedWords {
-		if strings.EqualFold(s, rw) {
+		if strings.EqualFold(identifier, rw) {
 			return false
 		}
 	}
 
-	matched, _ := regexp.MatchString("[a-zA-Z_][a-zA-Z_0-9]*", s) //nolint:errcheck // ignore
+	matched, _ := regexp.MatchString("[a-zA-Z_][a-zA-Z_0-9]*", identifier) //nolint:errcheck // ignore
 
 	return matched
 }

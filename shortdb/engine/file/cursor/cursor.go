@@ -1,32 +1,16 @@
 package cursor
 
 import (
-	page "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/page/v1"
-	table "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/table/v1"
+	page "github.com/shortlink-org/shortdb/shortdb/domain/page/v1"
+	"github.com/shortlink-org/shortdb/shortdb/pkg/safecast"
 )
-
-func New(t *table.Table, isEnd bool) (*Cursor, error) {
-	cursor := &Cursor{
-		Table:      t,
-		RowId:      0,
-		PageId:     0,
-		EndOfTable: isEnd,
-	}
-
-	if isEnd {
-		cursor.RowId = t.GetStats().GetRowsCount()
-		cursor.PageId = t.GetStats().GetPageCount()
-	}
-
-	return cursor, nil
-}
 
 func (c *Cursor) Advance() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.RowId > 0 && c.RowId%c.Table.GetOption().GetPageSize() == 0 {
-		c.PageId = int32(c.RowId / c.Table.GetOption().GetPageSize())
+		c.PageId = safecast.IntToInt32(int(c.RowId / c.Table.GetOption().GetPageSize()))
 	}
 
 	if (c.Table.GetStats().GetRowsCount() - 1) == c.RowId {

@@ -1,7 +1,5 @@
 package file
 
-import (
-	"fmt"
-)
+import "errors"
 
-var ErrExistTable = fmt.Errorf("at CREATE TABLE: exist table")
+var ErrExistTable = errors.New("at CREATE TABLE: exist table")

@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	session "github.com/shortlink-org/shortdb/shortdb/domain/session/v1"
+	"github.com/shortlink-org/shortdb/shortdb/repl"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
-
-	v1 "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/session/v1"
-	"github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/repl"
 )
 
 func main() {
@@ -19,9 +18,9 @@ func main() {
 		Use:   "shortdb",
 		Short: "ShortDB it's daabase for experiments",
 		Long:  "Implementation simple database like SQLite",
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(_ *cobra.Command, _ []string) {
 			// run new session
-			s, err := v1.New()
+			s, err := session.New()
 			if err != nil {
 				panic(err)
 			}
@@ -37,13 +36,17 @@ func main() {
 	}
 
 	if err := rootCmd.Execute(); err != nil {
+		//nolint:revive,forbidigo // just print error
 		fmt.Println(err)
+
 		return
 	}
 
 	// Generate docs
 	if err := doc.GenMarkdownTree(rootCmd, "./pkg/shortdb/docs"); err != nil {
+		//nolint:revive,forbidigo // just print error
 		fmt.Println(err)
+
 		return
 	}
 }

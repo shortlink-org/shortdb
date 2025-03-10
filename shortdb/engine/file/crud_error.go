@@ -1,12 +1,15 @@
 package file
 
 import (
+	"errors"
 	"fmt"
 )
 
-var ErrIncorrectNameFields = fmt.Errorf("at SELECT: expected field to SELECT")
-var ErrCreatePage = fmt.Errorf("at INSERT INTO: error create a new page")
-var ErrCreateCursor = fmt.Errorf("at INSERT INTO: error create a new cursor")
+var (
+	ErrIncorrectNameFields = errors.New("at SELECT: expected field to SELECT")
+	ErrCreatePage          = errors.New("at INSERT INTO: error create a new page")
+	ErrCreateCursor        = errors.New("at INSERT INTO: error create a new cursor")
+)
 
 // NotExistTableError is an error type returned when the table does not exist
 type NotExistTableError struct {
@@ -17,11 +20,11 @@ type NotExistTableError struct {
 func (e *NotExistTableError) Error() string {
 	switch e.Type {
 	case "SELECT":
-		return fmt.Sprintf("at SELECT: not exist table %s", e.Table)
+		return "at SELECT: not exist table " + e.Table
 	case "INSERT":
-		return fmt.Sprintf("at INSERT INTO: not exist table %s", e.Table)
+		return "at INSERT INTO: not exist table " + e.Table
 	default:
-		return fmt.Sprintf("not exist table %s", e.Table)
+		return "not exist table " + e.Table
 	}
 }
 

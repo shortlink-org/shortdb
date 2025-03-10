@@ -1,10 +1,10 @@
 package v1
 
-import (
-	"github.com/shortlink-org/shortlink/pkg/types/vector"
-)
+type FilterType interface {
+	int | int64 | uint64 | float64 | string
+}
 
-func Filter[V vector.Type](lValue V, rValue V, operator Operator) bool {
+func Filter[V FilterType](lValue, rValue V, operator Operator) bool {
 	switch operator {
 	case Operator_OPERATOR_EQ:
 		return lValue == rValue

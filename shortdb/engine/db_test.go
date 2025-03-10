@@ -1,4 +1,4 @@
-package engine
+package engine_test
 
 import (
 	"context"
@@ -6,12 +6,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/shortlink-org/shortdb/shortdb/engine"
+	"github.com/shortlink-org/shortdb/shortdb/engine/file"
+	parser "github.com/shortlink-org/shortdb/shortdb/parser/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
-
-	"github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/engine/file"
-	parser "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/parser/v1"
 )
 
 func TestMain(m *testing.M) {
@@ -20,13 +20,14 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+//nolint:revive,maintidx // ignore style for tests
 func TestDatabase(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	// set engine
 	path := "/tmp/shortdb_test_unit"
 
-	store, err := New(ctx, "file", file.SetName("testDatabase"), file.SetPath(path))
+	store, err := engine.New(ctx, "file", file.SetName("testDatabase"), file.SetPath(path))
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -117,7 +118,7 @@ func TestDatabase(t *testing.T) {
 
 		resp, err := store.Select(qSelectUsers.GetQuery())
 		require.NoError(t, err)
-		assert.Equal(t, 300, len(resp))
+		assert.Len(t, resp, 300)
 	})
 
 	t.Run("SELECT USERS WITH WHERE id=99 AND LIMIT 2", func(t *testing.T) {
@@ -126,7 +127,7 @@ func TestDatabase(t *testing.T) {
 
 		resp, err := store.Select(qSelectUsers.GetQuery())
 		require.NoError(t, err)
-		assert.Equal(t, 2, len(resp))
+		assert.Len(t, resp, 2)
 	})
 
 	t.Run("SELECT USERS FULL SCAN", func(t *testing.T) {
@@ -135,7 +136,7 @@ func TestDatabase(t *testing.T) {
 
 		resp, err := store.Select(qSelectUsers.GetQuery())
 		require.NoError(t, err)
-		assert.Equal(t, 1383, len(resp))
+		assert.Len(t, resp, 1383)
 	})
 
 	t.Run("CREATE INDEX BINARY", func(t *testing.T) {

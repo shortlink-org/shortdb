@@ -1,13 +1,17 @@
 package index
 
 import (
+	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 
-	index "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/index/v1"
-	page "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/page/v1"
-	binary_tree "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/engine/file/index/binary-tree"
+	index "github.com/shortlink-org/shortdb/shortdb/domain/index/v1"
+	page "github.com/shortlink-org/shortdb/shortdb/domain/page/v1"
+	binary_tree "github.com/shortlink-org/shortdb/shortdb/engine/file/index/binary-tree"
 )
+
+var ErrTreeInsert = errors.New("failed to insert value into tree")
 
 func New(in *index.Index, rows []*page.Row) (Index[any], error) {
 	var tree Index[any]
@@ -23,7 +27,14 @@ func New(in *index.Index, rows []*page.Row) (Index[any], error) {
 		tree = binary_tree.New(func(a, b any) int {
 			switch x, y := reflect.TypeOf(a), reflect.TypeOf(b); {
 			case x.String() == "int" && y.String() == "int":
-				return a.(int) - b.(int) //nolint:forcetypeassert // simple type assertion
+				aInt, aOk := a.(int)
+				bInt, bOk := b.(int)
+
+				if aOk && bOk {
+					return aInt - bInt
+				}
+
+				return 0
 			default:
 				return 0
 			}
@@ -32,12 +43,12 @@ func New(in *index.Index, rows []*page.Row) (Index[any], error) {
 		for i := range rows {
 			v, err := strconv.Atoi(string(rows[i].GetValue()["id"]))
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to convert row id to integer: %w", err)
 			}
 
 			err = tree.Insert(v)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("%w: %w", ErrTreeInsert, err)
 			}
 		}
 	}

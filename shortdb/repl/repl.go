@@ -8,28 +8,28 @@ import (
 
 	"github.com/c-bata/go-prompt"
 	"github.com/pterm/pterm"
-
-	session "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/domain/session/v1"
-	"github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/engine"
-	"github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/engine/file"
-	parser "github.com/shortlink-org/shortlink/boundaries/shortdb/shortdb/parser/v1"
+	session "github.com/shortlink-org/shortdb/shortdb/domain/session/v1"
+	"github.com/shortlink-org/shortdb/shortdb/engine"
+	"github.com/shortlink-org/shortdb/shortdb/engine/file"
+	parser "github.com/shortlink-org/shortdb/shortdb/parser/v1"
 )
 
 type Repl struct {
+	mu sync.Mutex
+
 	engine  engine.Engine
 	session *session.Session
-	mu      sync.Mutex
 }
 
-func New(ctx context.Context, s *session.Session) (*Repl, error) {
+func New(ctx context.Context, sess *session.Session) (*Repl, error) {
 	// set engine
-	store, err := engine.New(ctx, "file", file.SetName(s.GetCurrentDatabase()), file.SetPath("/tmp/shortdb_repl"))
+	store, err := engine.New(ctx, "file", file.SetName(sess.GetCurrentDatabase()), file.SetPath("/tmp/shortdb_repl"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create engine: %w", err)
 	}
 
 	return &Repl{
-		session: s,
+		session: sess,
 		engine:  store,
 	}, nil
 }
@@ -44,7 +44,7 @@ func (r *Repl) Run() { //nolint:gocyclo,gocognit // ignore
 	r.help()
 
 	for {
-		t := prompt.Input("> ", completer,
+		input := prompt.Input("> ", completer,
 			prompt.OptionTitle("shortdb"),
 			prompt.OptionHistory(r.session.GetHistory()),
 			prompt.OptionPrefixTextColor(prompt.Yellow),
@@ -53,29 +53,29 @@ func (r *Repl) Run() { //nolint:gocyclo,gocognit // ignore
 			prompt.OptionSuggestionBGColor(prompt.DarkGray),
 		)
 
-		if t == "" {
+		if input == "" {
 			continue
 		}
 
 		// if this next line
-		if t[len(t)-1] == ';' || t[0] == '.' {
-			t = fmt.Sprintf("%s %s", r.session.GetRaw(), t)
+		if input[len(input)-1] == ';' || input[0] == '.' {
+			input = fmt.Sprintf("%s %s", r.session.GetRaw(), input)
 			r.session.Raw = ""
 			r.session.Exec = true
 
 			// set in history
-			t = strings.TrimSpace(t)
-			r.session.History = append(r.session.GetHistory(), t)
+			input = strings.TrimSpace(input)
+			r.session.History = append(r.session.GetHistory(), input)
 		} else {
-			r.session.Raw += fmt.Sprintf("%s ", t)
+			r.session.Raw += input + " "
 			r.session.Exec = false
 		}
 
-		t = strings.TrimSpace(t)
+		input = strings.TrimSpace(input)
 
-		switch t[0] {
+		switch input[0] {
 		case '.': // if this command
-			s := strings.Split(t, " ")
+			s := strings.Split(input, " ")
 
 			switch s[0] {
 			case ".close":
@@ -87,7 +87,7 @@ func (r *Repl) Run() { //nolint:gocyclo,gocognit // ignore
 
 				return
 			case ".open":
-				if err := r.open(t); err != nil {
+				if err := r.open(input); err != nil {
 					pterm.FgRed.Println(err)
 				}
 			case ".help":
@@ -108,7 +108,7 @@ func (r *Repl) Run() { //nolint:gocyclo,gocognit // ignore
 				continue
 			}
 
-			p, err := parser.New(t)
+			p, err := parser.New(input)
 			if err != nil {
 				pterm.FgRed.Println(err)
 				continue

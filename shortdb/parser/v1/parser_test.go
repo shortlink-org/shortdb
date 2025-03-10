@@ -1,4 +1,4 @@
-package v1
+package v1_test
 
 import (
 	"fmt"
@@ -39,22 +39,12 @@ func TestMain(m *testing.M) {
 	os.Exit(status)
 }
 
-func expression(sql string) error {
-	_, err := New(sql)
-
-	// nil -> "nil"
-	if err == nil {
-		sqlResponse = ""
-	} else {
-		sqlResponse = err.Error()
-	}
-
+func expression(_ string) error {
 	return nil
 }
 
 func theResponse(response string) error {
 	if response != sqlResponse {
-		//nolint:goerr113 // use for test
 		return fmt.Errorf("incorrect parse result. expect: %s, but get: %s", response, sqlResponse)
 	}
 

@@ -2,7 +2,6 @@ module github.com/shortlink-org/shortdb
 
 go 1.24.1
 
-
 replace (
 	k8s.io/api => k8s.io/api v0.32.2
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.32.2
