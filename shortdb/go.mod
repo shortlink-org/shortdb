@@ -8,7 +8,7 @@ require (
 	github.com/pterm/pterm v0.12.80
 	github.com/sasha-s/go-deadlock v0.3.5
 	github.com/segmentio/encoding v0.4.1
-	github.com/shortlink-org/shortlink v0.0.0-20250308170213-731119c94880
+	github.com/shortlink-org/shortlink 5b54b9fde74f
 	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
