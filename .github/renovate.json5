@@ -1,0 +1,46 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+  ],
+  rangeStrategy: 'bump',
+  baseBranches: [
+    'main',
+  ],
+  automerge: false,
+  patch: {
+    automerge: true,
+  },
+  commitBody: 'Signed-off-by: {{{gitAuthor}}}',
+  'docker-compose': {
+    fileMatch: [
+      '^.*/?ops/docker-compose/.*.ya?ml$',
+    ],
+  },
+  gitlabci: {
+    fileMatch: [
+      '^.*/?ops/gitlab/.*.ya?ml$',
+    ],
+  },
+  packageRules: [
+    {
+      allowedVersions: '<2.0.0',
+      matchPackageNames: [
+        '/^github.com/mattn/go-sqlite3$/',
+      ],
+    },
+    {
+      matchManagers: [
+        'gomod',
+      ],
+      ignoreDeps: [
+        'github.com/shortlink-org/shortlink',
+        'github.com/shortlink-org/shortdb',
+      ],
+      matchPackageNames: [
+        '/^github.com/shortlink-org/shortlink$/',
+        '/^github.com/shortlink-org/shortdb$/',
+      ],
+    },
+  ],
+}
