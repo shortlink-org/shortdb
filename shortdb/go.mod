@@ -1,6 +1,6 @@
 module github.com/shortlink-org/shortdb/shortdb
 
-go 1.24.1
+go 1.24.2
 
 require (
 	github.com/c-bata/go-prompt v0.2.6
