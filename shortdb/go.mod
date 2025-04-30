@@ -12,7 +12,7 @@ require (
 	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
-	github.com/spf13/viper v1.19.0
+	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/goleak v1.3.0
 	google.golang.org/protobuf v1.36.6
@@ -28,6 +28,7 @@ require (
 	github.com/cucumber/messages/go/v21 v21.0.1 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
+	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/gookit/color v1.5.4 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
