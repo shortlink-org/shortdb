@@ -1,6 +1,6 @@
 module github.com/shortlink-org/shortdb
 
-go 1.24.2
+go 1.24.3
 
 replace (
 	k8s.io/api => k8s.io/api v0.32.3
