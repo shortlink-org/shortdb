@@ -4,7 +4,7 @@ go 1.24.5
 
 require (
 	github.com/c-bata/go-prompt v0.2.6
-	github.com/cucumber/godog v0.15.0
+	github.com/cucumber/godog v0.15.1
 	github.com/pterm/pterm v0.12.81
 	github.com/sasha-s/go-deadlock v0.3.5
 	github.com/segmentio/encoding v0.4.1
