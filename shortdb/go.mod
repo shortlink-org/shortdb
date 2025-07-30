@@ -7,7 +7,7 @@ require (
 	github.com/cucumber/godog v0.15.1
 	github.com/pterm/pterm v0.12.81
 	github.com/sasha-s/go-deadlock v0.3.5
-	github.com/segmentio/encoding v0.5.2
+	github.com/segmentio/encoding v0.5.3
 	github.com/shortlink-org/shortlink v0.0.0-20250308170213-731119c94880
 	github.com/sourcegraph/conc v0.3.0
 	github.com/spf13/cobra v1.9.1
