@@ -5,7 +5,7 @@ go 1.25.3
 require (
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/cucumber/godog v0.15.1
-	github.com/pterm/pterm v0.12.81
+	github.com/pterm/pterm v0.12.82
 	github.com/sasha-s/go-deadlock v0.3.6
 	github.com/segmentio/encoding v0.5.3
 	github.com/shortlink-org/shortlink v0.0.0-20250308170213-731119c94880
