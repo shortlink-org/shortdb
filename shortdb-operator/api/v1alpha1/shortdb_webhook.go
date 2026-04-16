@@ -17,23 +17,24 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"context"
 	"strconv"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // log is for logging in this package.
 var shortdblog = logf.Log.WithName("shortdb-resource")
 
 func (r *ShortDB) SetupWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(r).
+	return ctrl.NewWebhookManagedBy(mgr, r).
+		WithDefaulter(r).
+		WithValidator(r).
 		Complete()
 }
 
@@ -41,19 +42,20 @@ func (r *ShortDB) SetupWebhookWithManager(mgr ctrl.Manager) error {
 
 //+kubebuilder:webhook:path=/mutate-shortdb-shortdb-shortlink-v1alpha1-shortdb,mutating=true,failurePolicy=fail,sideEffects=None,groups=shortdb.shortdb.shortlink,resources=shortdbs,verbs=create;update,versions=v1alpha1,name=mshortdb.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Defaulter = &ShortDB{}
+var _ admission.Defaulter[*ShortDB] = &ShortDB{}
 
-// Default implements webhook.Defaulter so a webhook will be registered for the type
-func (r *ShortDB) Default() {
-	shortdblog.Info("default", "name", r.Name)
+// Default implements admission.Defaulter so a webhook will be registered for the type.
+func (r *ShortDB) Default(_ context.Context, obj *ShortDB) error {
+	shortdblog.Info("default", "name", obj.Name)
 
 	// TODO(user): fill in your defaulting logic.
+	return nil
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
 //+kubebuilder:webhook:path=/validate-shortdb-shortdb-shortlink-v1alpha1-shortdb,mutating=false,failurePolicy=fail,sideEffects=None,groups=shortdb.shortdb.shortlink,resources=shortdbs,verbs=create;update,versions=v1alpha1,name=vshortdb.kb.io,admissionReviewVersions=v1
 
-var _ webhook.Validator = &ShortDB{}
+var _ admission.Validator[*ShortDB] = &ShortDB{}
 
 func (r *ShortDB) validateReplicas() error {
 	var allErrs field.ErrorList
@@ -70,26 +72,26 @@ func (r *ShortDB) validateReplicas() error {
 	return nil
 }
 
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *ShortDB) ValidateCreate() error {
-	shortdblog.Info("validate create", "name", r.Name)
+// ValidateCreate implements admission.Validator so a webhook will be registered for the type.
+func (r *ShortDB) ValidateCreate(_ context.Context, obj *ShortDB) (admission.Warnings, error) {
+	shortdblog.Info("validate create", "name", obj.Name)
 
 	// TODO(user): fill in your validation logic upon object creation.
-	return r.validateReplicas()
+	return nil, obj.validateReplicas()
 }
 
-// ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *ShortDB) ValidateUpdate(old runtime.Object) error {
-	shortdblog.Info("validate update", "name", r.Name)
+// ValidateUpdate implements admission.Validator so a webhook will be registered for the type.
+func (r *ShortDB) ValidateUpdate(_ context.Context, _, newObj *ShortDB) (admission.Warnings, error) {
+	shortdblog.Info("validate update", "name", newObj.Name)
 
 	// TODO(user): fill in your validation logic upon object update.
-	return r.validateReplicas()
+	return nil, newObj.validateReplicas()
 }
 
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *ShortDB) ValidateDelete() error {
-	shortdblog.Info("validate delete", "name", r.Name)
+// ValidateDelete implements admission.Validator so a webhook will be registered for the type.
+func (r *ShortDB) ValidateDelete(_ context.Context, obj *ShortDB) (admission.Warnings, error) {
+	shortdblog.Info("validate delete", "name", obj.Name)
 
 	// TODO(user): fill in your validation logic upon object deletion.
-	return nil
+	return nil, nil
 }

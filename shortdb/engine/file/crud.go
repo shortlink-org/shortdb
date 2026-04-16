@@ -2,48 +2,76 @@ package file
 
 import (
 	"fmt"
+	"sort"
 
 	page "github.com/shortlink-org/shortdb/shortdb/domain/page/v1"
 	query "github.com/shortlink-org/shortdb/shortdb/domain/query/v1"
+	dtable "github.com/shortlink-org/shortdb/shortdb/domain/table/v1"
 	"github.com/shortlink-org/shortdb/shortdb/engine/file/cursor"
+	"google.golang.org/protobuf/proto"
 )
+
+// selectFieldList returns the list of column names to read for a SELECT, expanding a lone * to all table columns.
+func selectFieldList(in *query.Query, tbl *dtable.Table) ([]string, error) {
+	fields := in.GetFields()
+	if len(fields) == 0 {
+		return nil, ErrIncorrectNameFields
+	}
+
+	if len(fields) == 1 && fields[0] == "*" {
+		out := make([]string, 0, len(tbl.GetFields()))
+		for n := range tbl.GetFields() {
+			out = append(out, n)
+		}
+
+		sort.Strings(out)
+
+		return out, nil
+	}
+
+	return fields, nil
+}
 
 func (f *File) Select(in *query.Query) ([]*page.Row, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	// check table
-	table := f.database.GetTables()[in.GetTableName()]
-	if table == nil {
+	if isDiscoveryCatalogTable(in.GetTableName()) {
+		return f.selectDiscoveryCatalog(in)
+	}
+
+	tbl := f.database.GetTables()[in.GetTableName()]
+	if tbl == nil {
 		return nil, &NotExistTableError{
 			Table: in.GetTableName(),
 			Type:  "SELECT",
 		}
 	}
 
-	if len(in.GetFields()) == 0 {
-		return nil, ErrIncorrectNameFields
+	fieldNames, err := selectFieldList(in, tbl)
+	if err != nil {
+		return nil, err
 	}
 
 	// response
 	response := make([]*page.Row, 0)
 
-	currentRow := cursor.NewBuilder(table).Build()
+	currentRow := cursor.NewBuilder(tbl).Build()
 	for !currentRow.EndOfTable {
 		// load data
-		if table.GetPages()[currentRow.PageId] == nil {
-			pagePath := fmt.Sprintf("%s/%s_%s_%d.page", f.path, f.database.GetName(), table.GetName(), currentRow.PageId)
+		if tbl.GetPages()[currentRow.PageId] == nil {
+			pagePath := fmt.Sprintf("%s/%s_%s_%d.page", f.path, f.database.GetName(), tbl.GetName(), currentRow.PageId)
 
 			payload, errLoadPage := f.loadPage(pagePath)
 			if errLoadPage != nil {
 				return nil, errLoadPage
 			}
 
-			if table.GetPages() == nil {
-				table.Pages = make(map[int32]*page.Page, 0)
+			if tbl.GetPages() == nil {
+				tbl.Pages = make(map[int32]*page.Page, 0)
 			}
 
-			table.Pages[currentRow.PageId] = payload
+			tbl.Pages[currentRow.PageId] = payload
 		}
 
 		// get value
@@ -52,7 +80,7 @@ func (f *File) Select(in *query.Query) ([]*page.Row, error) {
 			return nil, fmt.Errorf("get value error: %w", errGetValue)
 		}
 
-		for _, field := range in.GetFields() {
+		for _, field := range fieldNames {
 			if record.GetValue()[field] == nil {
 				return nil, &IncorrectNameFieldsError{
 					Field: field,
@@ -61,8 +89,13 @@ func (f *File) Select(in *query.Query) ([]*page.Row, error) {
 			}
 		}
 
-		if in.IsFilter(record, table.GetFields()) {
-			response = append(response, record)
+		if in.IsFilter(record, tbl.GetFields()) {
+			cloned, ok := proto.Clone(record).(*page.Row)
+			if !ok || cloned == nil {
+				return nil, ErrSelectRowClone
+			}
+
+			response = append(response, cloned)
 
 			if in.IsLimit() {
 				in.Limit--

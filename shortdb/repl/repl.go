@@ -3,11 +3,12 @@ package repl
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
-	"github.com/c-bata/go-prompt"
-	"github.com/pterm/pterm"
+	"charm.land/lipgloss/v2"
+
 	session "github.com/shortlink-org/shortdb/shortdb/domain/session/v1"
 	"github.com/shortlink-org/shortdb/shortdb/engine"
 	"github.com/shortlink-org/shortdb/shortdb/engine/file"
@@ -34,107 +35,99 @@ func New(ctx context.Context, sess *session.Session) (*Repl, error) {
 	}, nil
 }
 
-func (r *Repl) Run() { //nolint:gocyclo,gocognit // ignore
-	// load history
-	if err := r.init(); err != nil {
-		pterm.FgRed.Println(err)
-	}
-
-	// Show help snippet
-	r.help()
-
-	for {
-		input := prompt.Input("> ", completer,
-			prompt.OptionTitle("shortdb"),
-			prompt.OptionHistory(r.session.GetHistory()),
-			prompt.OptionPrefixTextColor(prompt.Yellow),
-			prompt.OptionPreviewSuggestionTextColor(prompt.Blue),
-			prompt.OptionSelectedSuggestionBGColor(prompt.LightGray),
-			prompt.OptionSuggestionBGColor(prompt.DarkGray),
-		)
-
-		if input == "" {
-			continue
-		}
-
-		// if this next line
-		if input[len(input)-1] == ';' || input[0] == '.' {
-			input = fmt.Sprintf("%s %s", r.session.GetRaw(), input)
-			r.session.Raw = ""
-			r.session.Exec = true
-
-			// set in history
-			input = strings.TrimSpace(input)
-			r.session.History = append(r.session.GetHistory(), input)
-		} else {
-			r.session.Raw += input + " "
-			r.session.Exec = false
-		}
-
-		input = strings.TrimSpace(input)
-
-		switch input[0] {
-		case '.': // if this command
-			s := strings.Split(input, " ")
-
-			switch s[0] {
-			case ".close":
-				if err := r.close(); err != nil {
-					pterm.FgRed.Println(err)
-				}
-
-				pterm.FgYellow.Println("Good buy!")
-
-				return
-			case ".open":
-				if err := r.open(input); err != nil {
-					pterm.FgRed.Println(err)
-				}
-			case ".help":
-				r.help()
-			case ".save":
-				if err := r.save(); err != nil {
-					pterm.FgRed.Println(err)
-					continue
-				}
-
-				pterm.FgGreen.Println("Saved!")
-			default:
-				pterm.FgRed.Println("incorrect command")
-			}
-		default: // if this not command then this SQL-expression
-			// if this multiline then skip
-			if !r.session.GetExec() {
-				continue
-			}
-
-			p, err := parser.New(input)
-			if err != nil {
-				pterm.FgRed.Println(err)
-				continue
-			}
-
-			// exec query
-			response, err := r.engine.Exec(p.GetQuery())
-			if err != nil && err.Error() != "" {
-				pterm.FgRed.Println(err)
-				continue
-			}
-
-			if response != nil {
-				pterm.FgGreen.Println(response)
-			} else {
-				pterm.FgGreen.Println(`Executed`)
-			}
-		}
+func (r *Repl) Run() {
+	err := r.RunTUI()
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, errStyle.Render(err.Error()))
 	}
 }
 
-func completer(in prompt.Document) []prompt.Suggest {
-	w := in.GetWordBeforeCursor()
-	if w == "" {
-		return []prompt.Suggest{}
+var (
+	errStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("204"))
+	okStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("78"))
+	warnStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+)
+
+// handleREPLLine processes one submitted line (same semantics as the former go-prompt loop).
+func (r *Repl) handleREPLLine(line string) ([]string, bool) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return nil, false
 	}
 
-	return prompt.FilterHasPrefix(suggestions, w, true)
+	input := line
+
+	if input[len(input)-1] == ';' || input[0] == '.' {
+		input = fmt.Sprintf("%s %s", r.session.GetRaw(), input)
+		r.session.Raw = ""
+		r.session.Exec = true
+
+		input = strings.TrimSpace(input)
+		r.session.History = append(r.session.GetHistory(), input)
+	} else {
+		r.session.Raw += line + " "
+		r.session.Exec = false
+	}
+
+	input = strings.TrimSpace(input)
+
+	switch input[0] {
+	case '.':
+		s := strings.Split(input, " ")
+
+		switch s[0] {
+		case ".close":
+			err := r.close()
+			if err != nil {
+				return []string{errStyle.Render(err.Error())}, false
+			}
+
+			return []string{warnStyle.Render("Goodbye!")}, true
+		case ".open":
+			err := r.open(input)
+			if err != nil {
+				return []string{errStyle.Render(err.Error())}, false
+			}
+
+			return []string{okStyle.Render("database switched")}, false
+		case ".help":
+			return []string{strings.TrimSpace(r.helpString())}, false
+		case ".save":
+			err := r.save()
+			if err != nil {
+				return []string{errStyle.Render(err.Error())}, false
+			}
+
+			return []string{okStyle.Render("Saved!")}, false
+		default:
+			return []string{errStyle.Render("incorrect command")}, false
+		}
+	default:
+		if !r.session.GetExec() {
+			return nil, false
+		}
+
+		p, err := parser.New(input)
+		if err != nil {
+			return []string{errStyle.Render(err.Error())}, false
+		}
+
+		response, err := r.engine.Exec(p.GetQuery())
+		if err != nil && err.Error() != "" {
+			return []string{errStyle.Render(err.Error())}, false
+		}
+
+		if response != nil {
+			lines := formatExecTranscript(response)
+
+			out := make([]string, len(lines))
+			for i := range lines {
+				out[i] = okStyle.Render(lines[i])
+			}
+
+			return out, false
+		}
+
+		return []string{okStyle.Render("Executed")}, false
+	}
 }

@@ -3,16 +3,19 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 
 	session "github.com/shortlink-org/shortdb/shortdb/domain/session/v1"
 	"github.com/shortlink-org/shortdb/shortdb/repl"
-	"github.com/spf13/cobra"
-	"github.com/spf13/cobra/doc"
 )
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+
+	var gendocsOut string
 
 	rootCmd := &cobra.Command{
 		Use:   "shortdb",
@@ -35,18 +38,24 @@ func main() {
 		},
 	}
 
-	if err := rootCmd.Execute(); err != nil {
-		//nolint:revive,forbidigo // just print error
-		fmt.Println(err)
-
-		return
+	gendocsCmd := &cobra.Command{
+		Use:   "gendocs",
+		Short: "Generate Cobra command reference as Markdown files",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return doc.GenMarkdownTree(rootCmd, gendocsOut)
+		},
 	}
+	gendocsCmd.Flags().StringVarP(&gendocsOut, "output", "o", "shortdb/docs", "directory to write Markdown files into")
 
-	// Generate docs
-	if err := doc.GenMarkdownTree(rootCmd, "./pkg/shortdb/docs"); err != nil {
-		//nolint:revive,forbidigo // just print error
+	rootCmd.AddCommand(gendocsCmd)
+
+	err := rootCmd.Execute()
+
+	cancel()
+
+	if err != nil {
+		//nolint:revive,forbidigo // CLI error path
 		fmt.Println(err)
-
-		return
+		os.Exit(1)
 	}
 }

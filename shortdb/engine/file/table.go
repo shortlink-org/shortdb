@@ -18,6 +18,10 @@ func (f *File) CreateTable(item *query.Query) error {
 		return ErrExistTable
 	}
 
+	if isReservedDiscoveryTableName(item.GetTableName()) {
+		return ErrReservedTableName
+	}
+
 	f.database.Tables[item.GetTableName()] = table.New(item)
 
 	return nil

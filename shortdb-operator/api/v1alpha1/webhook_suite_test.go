@@ -36,6 +36,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	"github.com/shortlink-org/shortdb/shortdb-operator/internal/manageropts"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
@@ -86,14 +90,19 @@ var _ = BeforeSuite(func() {
 
 	// start webhook server using Manager
 	webhookInstallOptions := &testEnv.WebhookInstallOptions
-	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:             scheme,
-		Host:               webhookInstallOptions.LocalServingHost,
-		Port:               webhookInstallOptions.LocalServingPort,
-		CertDir:            webhookInstallOptions.LocalServingCertDir,
-		LeaderElection:     false,
-		MetricsBindAddress: "0",
-	})
+	mgrOpts, err := manageropts.Build(
+		manageropts.WithScheme(scheme),
+		manageropts.WithMetrics(metricsserver.Options{BindAddress: "0"}),
+		manageropts.WithWebhook(webhook.Options{
+			Host:    webhookInstallOptions.LocalServingHost,
+			Port:    webhookInstallOptions.LocalServingPort,
+			CertDir: webhookInstallOptions.LocalServingCertDir,
+		}),
+		manageropts.WithLeaderElection(false),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	mgr, err := ctrl.NewManager(cfg, mgrOpts)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = (&ShortDB{}).SetupWebhookWithManager(mgr)

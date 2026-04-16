@@ -7,6 +7,7 @@ import (
 
 var (
 	ErrIncorrectNameFields = errors.New("at SELECT: expected field to SELECT")
+	ErrSelectRowClone      = errors.New("at SELECT: row clone failed")
 	ErrCreatePage          = errors.New("at INSERT INTO: error create a new page")
 	ErrCreateCursor        = errors.New("at INSERT INTO: error create a new cursor")
 )

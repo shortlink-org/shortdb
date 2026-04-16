@@ -645,6 +645,11 @@ func (p *Parser) doParse() (*query.Query, error) { //nolint:gocyclo,gocognit,mai
 			}
 
 			p.Query.Limit = int32(limit)
+			p.popWhitespace()
+
+			if p.GetI() < safecast.IntToInt32(len(p.GetSql())) && p.peek() == ";" {
+				p.Step = Step_STEP_SEMICOLON
+			}
 		case Step_STEP_CREATE_INDEX_NAME:
 			if len(p.GetQuery().GetIndexs()) == 0 {
 				p.Query.Indexs = []*index.Index{}
@@ -738,6 +743,11 @@ func (p *Parser) peekWithLength() (string, int32) {
 
 	if p.GetSql()[p.GetI()] == '\'' { // Quoted string
 		return p.peekQuotedStringWithLength()
+	}
+
+	// SELECT * — asterisk is not matched by identifier lexer ([a-zA-Z0-9] only).
+	if p.GetSql()[p.GetI()] == '*' {
+		return "*", 1
 	}
 
 	return p.peekIdentifierStringWithLength()
